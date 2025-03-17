@@ -5,7 +5,6 @@ def getAbility(num_ability):
 
     url = f'https://pokeapi.co/api/v2/ability/{num_ability}/'
     data_ability = requests.get(url).json()
-
     results_abilities = {}
 
     if len(data_ability["effect_entries"]) != 0:
