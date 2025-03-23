@@ -13,7 +13,7 @@ Create a virtual environment:
 
 ```bash
 python -m venv env
-source env/bin/source
+source /bin/source
 cd env
 ```
 
