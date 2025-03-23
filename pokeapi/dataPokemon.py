@@ -1,10 +1,16 @@
 import re
 import requests
+from requests.exceptions import RequestException
 
 def obtainDatasAbility(num_ability):
-
     url = f'https://pokeapi.co/api/v2/ability/{num_ability}/'
-    data_ability = requests.get(url).json()
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data_ability = response.json()
+    except RequestException as e:
+        raise RequestException(f"Error fetching ability data: {e}")
+
     results_abilities = {}
 
     if len(data_ability["effect_entries"]) != 0:
@@ -21,89 +27,100 @@ def obtainDatasAbility(num_ability):
     return results_abilities
 
 def obtainDatasPokemon(id_pokemon):
-    url = f'https://pokeapi.co/api/v2/pokemon-species/{id_pokemon}/'
-    general_data  = requests.get(url)
+    try:
+        # Specie datas
+        species_url = f'https://pokeapi.co/api/v2/pokemon-species/{id_pokemon}/'
+        species_response = requests.get(species_url)
+        species_response.raise_for_status()
+        species_data = species_response.json()
+        
+        # Pokemon datas
+        pokemon_id = species_data["id"]
+        pokemon_url = f'https://pokeapi.co/api/v2/pokemon/{pokemon_id}'
+        pokemon_response = requests.get(pokemon_url)
+        pokemon_response.raise_for_status()
+        pokemon_data = pokemon_response.json()
+        
+    except RequestException as e:
+        raise RequestException(f"Error fetching Pokemon data: {e}")
 
-    if not general_data:
-        return False
-
-    data = general_data.json()
+    # Formatting data
+    name_pokemon = species_data["name"]
+    url_sprite = pokemon_data["sprites"]["front_default"]
     
-    name_pokemon = data["name"]
-    id = data["id"]
-    character_data = requests.get(f"https://pokeapi.co/api/v2/pokemon/{id}").json()
-    url_sprite = character_data["sprites"]["front_default"]
-    
-    types = []
-    for name_types in character_data["types"]:
-        types.append(name_types["type"]["name"])
+    types = [t["type"]["name"] for t in pokemon_data["types"]]
 
+    # Obtain gender and description
     specie = {}
-    for some_genus in data["genera"]:
-        if some_genus["language"]["name"] in ["en"]:
-            specie["name_specie"] = some_genus["genus"]
+    for genus in species_data["genera"]:
+        if genus["language"]["name"] == "en":
+            specie["name_specie"] = genus["genus"]
             break
 
-    for some_description in reversed(data["flavor_text_entries"]):
-        if some_description["language"]["name"]  == "en":
-            specie["description"] = some_description["flavor_text"]
+    for entry in reversed(species_data["flavor_text_entries"]):
+        if entry["language"]["name"] == "en":
+            specie["description"] = entry["flavor_text"].replace("\n", " ")
             break
 
-    weight = character_data["weight"]/10
-    height = character_data["height"]/10
-
+    # Getting abilities
     abilities = {}
-    for ability in character_data["abilities"]:
+    for ability in pokemon_data["abilities"]:
         name_ability = ability["ability"]["name"]
-        id_ability = (re.findall(r'\d+', ability["ability"]["url"])[-1])
-        abilities[name_ability] = {"data_ability": (obtainDatasAbility(id_ability)),
-                                   "is_hidden": ability["is_hidden"]}
+        ability_url = ability["ability"]["url"]
+        id_ability = re.findall(r'\d+', ability_url)[-1]
+        
+        try:
+            ability_data = obtainDatasAbility(id_ability)
+        except RequestException as e:
+            raise RequestException(f"Error en habilidad {name_ability}: {e}")
+        
+        abilities[name_ability] = {
+            "data_ability": ability_data,
+            "is_hidden": ability["is_hidden"]
+        }
 
-    stats = {}
-    for stat in character_data["stats"]:
-        stats[stat["stat"]["name"]] = stat["base_stat"]
-
-    return {"id": id,
-            "image": url_sprite,
-            "name": name_pokemon,
-            "type": types,
-            "specie": specie,
-            "weight": weight,
-            "height": height,
-            "ability": abilities,
-            "stats": stats,
+    return {
+        "id": pokemon_id,
+        "image": url_sprite,
+        "name": name_pokemon,
+        "type": types,
+        "specie": specie,
+        "weight": pokemon_data["weight"]/10,
+        "height": pokemon_data["height"]/10,
+        "ability": abilities,
+        "stats": {s["stat"]["name"]: s["base_stat"] for s in pokemon_data["stats"]}
     }
 
 def getPokemon(pokemon):
-    data_pokemon = obtainDatasPokemon(pokemon)
+    try:
+        data_pokemon = obtainDatasPokemon(pokemon)
+    except RequestException as e:
+        return {
+            "error": "⚠️Erro on server. Please, try later"
+        }
+    except Exception as e:
+        return {
+            "error": f"Error: {str(e)}"
+        }
 
-    if not data_pokemon:
-        return None
+    # Formatear la respuesta
+    types = " ".join(data_pokemon["type"])
+    
+    abilities = "\n".join([
+        f"{name} - {'hidden' if data['is_hidden'] else 'not hidden'}"
+        for name, data in data_pokemon["ability"].items()
+    ])
 
-    types = ""
-    for name_type in data_pokemon["type"]:
-        types += name_type + " "
-
-    abilities = ""    
-    for name_ability, data_abilities in data_pokemon["ability"].items():
-        abilities +=  name_ability + " - "
-        if data_abilities["is_hidden"]:
-            abilities += "hidden" + "\n"
-        else:
-            abilities += "not hidden" + "\n"
-    abilities = abilities[:-1]
-
-    all_data_pokemon = f"""
+    return {
+        "data": f"""
 <strong>ID:</strong> {data_pokemon['id']}
 <strong>Name:</strong> {data_pokemon['name']}
 <strong>Type:</strong> {types}
-<strong>Ability:</strong>
-{abilities}
+<strong>Ability:</strong>\n{abilities}
 <strong>Specie:</strong> {data_pokemon['specie']['name_specie']}
 <strong>Description:</strong> {data_pokemon['specie']['description']}
 <strong>Weight:</strong> {data_pokemon["weight"]} kg
 <strong>Height:</strong> {data_pokemon["height"]} m
-"""
-    return {"data": all_data_pokemon, "image" : data_pokemon["image"]}
-
-pikachu = getPokemon(25)
+        """,
+        "image": data_pokemon["image"]
+    }
