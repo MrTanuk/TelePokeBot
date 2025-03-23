@@ -28,7 +28,7 @@ To active the virtual environment:
 
 Linux/macOS:
 ```bash
-source /bin/source
+source venv/bin/activate
 ```
 
 
