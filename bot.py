@@ -24,18 +24,18 @@ Type name or ID of the pokemon:
     <code>/pokedex 25</code> 
 """
         bot.send_message(message.chat.id, text_use_command, parse_mode="HTML")
+        return
+
+    pokemon_id = message.text.split()[1]
+    pokemon_data = getPokemon(pokemon_id)
+    if "error" in pokemon_data:
+        bot.send_message(message.chat.id, f"{pokemon_data['error']}")
         return None
 
-    id_pokemon = message.text.split()[1]
-    data_pokemon = getPokemon(id_pokemon)
-    if not data_pokemon:
-        bot.send_message(message.chat.id, "Pokemon not found. Try again")
-        return None
-    
-    url_image = data_pokemon["image"]
-    data_pokemon = data_pokemon["data"]
+    url_image = pokemon_data["image"]
+    pokemon_data = pokemon_data["data"]
 
-    bot.send_photo(message.chat.id, url_image, data_pokemon, parse_mode="HTML")
+    bot.send_photo(message.chat.id, url_image, pokemon_data, parse_mode="HTML")
 
 @bot.message_handler(commands=["help", f"help@{BOT_NAME}"], chat_types=["private", "group","supergroup"])
 def send_help(message):

@@ -1,15 +1,26 @@
 import re
 import requests
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, HTTPError
 
-def obtainDatasAbility(num_ability):
-    url = f'https://pokeapi.co/api/v2/ability/{num_ability}/'
+def fetchData(url):
     try:
         response = requests.get(url)
         response.raise_for_status()
-        data_ability = response.json()
-    except RequestException as e:
-        raise RequestException(f"Error fetching ability data: {e}")
+        return response.json()
+
+    except HTTPError as e:
+        if e.response.status_code == 404:
+            raise HTTPError("Pokémon not found")
+        raise HTTPError("Server error. Try later.")
+
+    except RequestException:
+        raise RequestException("Connection error. Try later.")
+
+def obtainDatasAbility(num_ability):
+    try:
+        data_ability = fetchData(f"https://pokeapi.co/api/v2/ability/{num_ability}/")
+    except RequestException:
+        raise RequestException(f"Error obtain ability: Connection error, try later.")
 
     results_abilities = {}
 
@@ -23,34 +34,23 @@ def obtainDatasAbility(num_ability):
         for effect in reversed(data_ability["flavor_text_entries"]):
             if effect["language"]["name"] == "en":
                 results_abilities["effect"] = effect["flavor_text"]
-                results_abilities["short_effect"] = "No data"
+                results_abilities["short_effect"] = "no data"
     return results_abilities
 
-def obtainDatasPokemon(id_pokemon):
+def obtainDatasPokemon(pokemon):
     try:
-        # Specie datas
-        species_url = f'https://pokeapi.co/api/v2/pokemon-species/{id_pokemon}/'
-        species_response = requests.get(species_url)
-        species_response.raise_for_status()
-        species_data = species_response.json()
-        
-        # Pokemon datas
-        pokemon_id = species_data["id"]
-        pokemon_url = f'https://pokeapi.co/api/v2/pokemon/{pokemon_id}'
-        pokemon_response = requests.get(pokemon_url)
-        pokemon_response.raise_for_status()
-        pokemon_data = pokemon_response.json()
-        
-    except RequestException as e:
-        raise RequestException(f"Error fetching Pokemon data: {e}")
+        species_data = fetchData(f"https://pokeapi.co/api/v2/pokemon-species/{pokemon}/")
+        pokemon_data = fetchData(f"https://pokeapi.co/api/v2/pokemon/{species_data['id']}/")
+    except (HTTPError, RequestException) as e:
+        raise e
 
-    # Formatting data
+    # formatting data
     name_pokemon = species_data["name"]
     url_sprite = pokemon_data["sprites"]["front_default"]
     
     types = [t["type"]["name"] for t in pokemon_data["types"]]
 
-    # Obtain gender and description
+    # obtain gender and description
     specie = {}
     for genus in species_data["genera"]:
         if genus["language"]["name"] == "en":
@@ -62,7 +62,7 @@ def obtainDatasPokemon(id_pokemon):
             specie["description"] = entry["flavor_text"].replace("\n", " ")
             break
 
-    # Getting abilities
+    # getting abilities
     abilities = {}
     for ability in pokemon_data["abilities"]:
         name_ability = ability["ability"]["name"]
@@ -72,7 +72,7 @@ def obtainDatasPokemon(id_pokemon):
         try:
             ability_data = obtainDatasAbility(id_ability)
         except RequestException as e:
-            raise RequestException(f"Error en habilidad {name_ability}: {e}")
+            raise 
         
         abilities[name_ability] = {
             "data_ability": ability_data,
@@ -80,7 +80,7 @@ def obtainDatasPokemon(id_pokemon):
         }
 
     return {
-        "id": pokemon_id,
+        "id": pokemon_data["id"],
         "image": url_sprite,
         "name": name_pokemon,
         "type": types,
@@ -94,16 +94,10 @@ def obtainDatasPokemon(id_pokemon):
 def getPokemon(pokemon):
     try:
         data_pokemon = obtainDatasPokemon(pokemon)
-    except RequestException as e:
-        return {
-            "error": "⚠️Erro on server. Please, try later"
-        }
     except Exception as e:
-        return {
-            "error": f"Error: {str(e)}"
-        }
+        return {"error": f"{e}"}
 
-    # Formatear la respuesta
+    #a formatting data to telegram message 
     types = " ".join(data_pokemon["type"])
     
     abilities = "\n".join([
@@ -113,14 +107,14 @@ def getPokemon(pokemon):
 
     return {
         "data": f"""
-<strong>ID:</strong> {data_pokemon['id']}
-<strong>Name:</strong> {data_pokemon['name']}
-<strong>Type:</strong> {types}
-<strong>Ability:</strong>\n{abilities}
-<strong>Specie:</strong> {data_pokemon['specie']['name_specie']}
-<strong>Description:</strong> {data_pokemon['specie']['description']}
-<strong>Weight:</strong> {data_pokemon["weight"]} kg
-<strong>Height:</strong> {data_pokemon["height"]} m
+<strong>id:</strong> {data_pokemon['id']}
+<strong>name:</strong> {data_pokemon['name']}
+<strong>type:</strong> {types}
+<strong>ability:</strong>\n{abilities}
+<strong>specie:</strong> {data_pokemon['specie']['name_specie']}
+<strong>description:</strong> {data_pokemon['specie']['description']}
+<strong>weight:</strong> {data_pokemon["weight"]} kg
+<strong>height:</strong> {data_pokemon["height"]} m
         """,
         "image": data_pokemon["image"]
     }
