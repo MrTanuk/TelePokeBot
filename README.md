@@ -14,7 +14,6 @@ Create a virtual environment:
 ```bash
 python -m venv env
 source /bin/source
-cd env
 ```
 
 
