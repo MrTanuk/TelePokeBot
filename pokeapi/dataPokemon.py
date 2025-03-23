@@ -1,7 +1,7 @@
 import re
 import requests
 
-def getAbility(num_ability):
+def obtainDatasAbility(num_ability):
 
     url = f'https://pokeapi.co/api/v2/ability/{num_ability}/'
     data_ability = requests.get(url).json()
@@ -20,7 +20,7 @@ def getAbility(num_ability):
                 results_abilities["short_effect"] = "No data"
     return results_abilities
 
-def getDataPokemon(id_pokemon):
+def obtainDatasPokemon(id_pokemon):
     url = f'https://pokeapi.co/api/v2/pokemon-species/{id_pokemon}/'
     general_data  = requests.get(url)
 
@@ -56,7 +56,7 @@ def getDataPokemon(id_pokemon):
     for ability in character_data["abilities"]:
         name_ability = ability["ability"]["name"]
         id_ability = (re.findall(r'\d+', ability["ability"]["url"])[-1])
-        abilities[name_ability] = {"data_ability": (getAbility(id_ability)),
+        abilities[name_ability] = {"data_ability": (obtainDatasAbility(id_ability)),
                                    "is_hidden": ability["is_hidden"]}
 
     stats = {}
@@ -73,3 +73,37 @@ def getDataPokemon(id_pokemon):
             "ability": abilities,
             "stats": stats,
     }
+
+def getPokemon(pokemon):
+    data_pokemon = obtainDatasPokemon(pokemon)
+
+    if not data_pokemon:
+        return None
+
+    types = ""
+    for name_type in data_pokemon["type"]:
+        types += name_type + " "
+
+    abilities = ""    
+    for name_ability, data_abilities in data_pokemon["ability"].items():
+        abilities +=  name_ability + " - "
+        if data_abilities["is_hidden"]:
+            abilities += "hidden" + "\n"
+        else:
+            abilities += "not hidden" + "\n"
+    abilities = abilities[:-1]
+
+    all_data_pokemon = f"""
+<strong>ID:</strong> {data_pokemon['id']}
+<strong>Name:</strong> {data_pokemon['name']}
+<strong>Type:</strong> {types}
+<strong>Ability:</strong>
+{abilities}
+<strong>Specie:</strong> {data_pokemon['specie']['name_specie']}
+<strong>Description:</strong> {data_pokemon['specie']['description']}
+<strong>Weight:</strong> {data_pokemon["weight"]} kg
+<strong>Height:</strong> {data_pokemon["height"]} m
+"""
+    return {"data": all_data_pokemon, "image" : data_pokemon["image"]}
+
+pikachu = getPokemon(25)
